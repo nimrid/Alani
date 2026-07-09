@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0A0A0F;
+  --color-bg-surface: #12121A;
+  --color-bg-elevated: #1C1C28;
+  --color-border-subtle: #2A2A38;
+  --color-border-active: #3D3D55;
+  
+  --color-text-primary: #F0F0F5;
+  --color-text-secondary: #8888A8;
+  --color-text-muted: #4A4A6A;
+
+  --color-safe: #2D6A8F;
+  --color-attack: #C47D1A;
+  --color-danger: #C43B1A;
+  --color-high-danger: #FF2D2D;
+
+  --color-goal: #FFD700;
+  --color-card-yellow: #F5C518;
+  --color-card-red: #E02020;
+  --color-var: #4A90D9;
+  --color-odds-up: #22C55E;
+  --color-odds-down: #EF4444;
+  --color-chain: #9945FF;
+
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+  --font-display: var(--font-space-grotesk), sans-serif;
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+@layer utilities {
+  .pulse-safe {
+    animation: pulse-safe 3s ease-in-out infinite;
+  }
+  .pulse-attack {
+    animation: pulse-attack 2s ease-in-out infinite;
+  }
+  .pulse-danger {
+    animation: pulse-danger 1.2s ease-in-out infinite;
+  }
+  .pulse-high-danger {
+    animation: pulse-high-danger 0.7s ease-in-out infinite;
+  }
+  .spin-slow {
+    animation: spin 2s linear infinite;
+  }
+}
+
+@keyframes pulse-safe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+@keyframes pulse-attack {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+@keyframes pulse-danger {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes pulse-high-danger {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes score-flash {
+  0% { transform: scale(0.8); color: var(--color-goal); }
+  20% { transform: scale(1.0); color: var(--color-goal); }
+  100% { transform: scale(1.0); color: var(--color-text-primary); }
+}
+@keyframes slide-up {
+  0% { transform: translateY(24px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@layer utilities {
+  .animate-score-flash {
+    animation: score-flash 500ms ease-out forwards;
+  }
+  .animate-slide-up {
+    animation: slide-up 220ms ease-out forwards;
+  }
+  .animate-shimmer {
+    background: linear-gradient(90deg, var(--color-bg-surface) 25%, var(--color-border-subtle) 50%, var(--color-bg-surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+}
