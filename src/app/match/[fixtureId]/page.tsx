@@ -13,6 +13,7 @@ import { AlaniProbabilityBar } from '@/components/alani/AlaniProbabilityBar';
 import { useTimelineStore } from '@/store/timelineStore';
 import { detectEvents } from '@/lib/alani/eventDetector';
 import { getFlag, getGroupName } from '@/lib/alani/utils';
+import { triggerNarration } from '@/lib/alani/narration';
 
 
 
@@ -20,8 +21,10 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
 
   const [fixtureData, setFixtureData] = useState<any>(null);
 
-  // Initialize live stream
-  useTxLineStream(fixtureId, 'scores');
+  // Initialize live stream — pass team names once fixtureData resolves
+  const homeTeamName = fixtureData?.Participant1 || 'Home';
+  const awayTeamName = fixtureData?.Participant2 || 'Away';
+  useTxLineStream(fixtureId, 'scores', homeTeamName, awayTeamName);
   useTxLineStream(fixtureId, 'odds');
 
   useEffect(() => {
@@ -46,7 +49,8 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
   const addEvent = useEventStore((state) => state.addEvent);
   const events = useEventStore((state) => state.events);
   const [analystCollapsed, setAnalystCollapsed] = useState(false);
-  const isFinished = statusSoccerId === 'F2' || String(statusSoccerId) === '4' || String(statusSoccerId) === '8';
+  // StatusId: 1=pre, 2=1st, 3=HT, 4=2nd, 5=FT, 6=1ET, 7=2ET, 8=ET-HT, 9=Pens
+  const isFinished = ['5', '9'].includes(String(statusSoccerId));
 
   useEffect(() => {
     return () => {
@@ -59,79 +63,114 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
   }, [fixtureId]);
 
   useEffect(() => {
-    fetch(`/api/txline/scores-snapshot?fixtureId=${fixtureId}`)
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch scores snapshot");
-        return res.json();
-      })
-      .then(data => {
-          if (Array.isArray(data)) {
-            const lineupEvent = [...data].reverse().find((d: any) => d.Lineups || d.lineups);
-            if (lineupEvent) {
-              setLineups(lineupEvent.Lineups || lineupEvent.lineups);
+    const loadSnapshot = () => {
+      fetch(`/api/txline/scores-snapshot?fixtureId=${fixtureId}`)
+        .then(res => {
+          if (!res.ok) {
+            console.warn('Snapshot unavailable for fixture', fixtureId, res.status);
+            return null;
+          }
+          return res.json();
+        })
+        .then(data => {
+          if (!data || !Array.isArray(data) || data.length === 0) return;
+
+
+          // ── Lineups ─────────────────────────────────────────────────────
+          const lineupItem = data.find((d: any) => d.Action === 'lineups' && d.Lineups);
+          if (lineupItem) setLineups(lineupItem.Lineups);
+
+          // ── Latest score & status ────────────────────────────────────────
+          // Sort descending by Ts to get the most recent item that has Stats
+          const withStats = data
+            .filter((d: any) => d.Stats && Object.keys(d.Stats).length > 0)
+            .sort((a: any, b: any) => (b.Ts || 0) - (a.Ts || 0));
+
+          const latestWithStats = withStats[0];
+          if (latestWithStats) {
+            const stats = latestWithStats.Stats;
+            const score: any = latestWithStats.Score;
+
+            // Primary: use Score.Participant1.Total.Goals (most reliable, includes ET/pens)
+            // Fallback: Stats["2"] = home goals, Stats["1002"] = away goals
+            const homeGoals = score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? 0;
+            const awayGoals = score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? 0;
+
+            // StatusId: 1=pre, 2=1st, 3=HT, 4=2nd, 5=FT, 6=1ET, 7=2ET, 8=ET-HT, 9=Pens
+            const statusId = String(latestWithStats.StatusId ?? '');
+            const clock = latestWithStats.Clock;
+            const liveMinutes = clock?.Seconds != null ? Math.floor(clock.Seconds / 60) : 0;
+
+            setScoreData({
+              scoreSoccer: {
+                Participant1: { Total: { Goals: homeGoals } },
+                Participant2: { Total: { Goals: awayGoals } },
+              },
+              statusSoccerId: statusId,
+              minutes: liveMinutes,
+              participant1Id: latestWithStats.Participant1Id ?? null,
+              participant2Id: latestWithStats.Participant2Id ?? null,
+            });
+
+            // Possession type from latest possession action
+            const possessionItem = data
+              .filter((d: any) => ['safe_possession', 'attack_possession', 'danger_possession', 'high_danger_possession'].includes((d.Action || '').toLowerCase()))
+              .sort((a: any, b: any) => (b.Ts || 0) - (a.Ts || 0))[0];
+
+            if (possessionItem) {
+              const actionToPossession: Record<string, any> = {
+                safe_possession: 'SafePossession',
+                attack_possession: 'AttackPossession',
+                danger_possession: 'DangerPossession',
+                high_danger_possession: 'HighDangerPossession',
+              };
+              setPossession(actionToPossession[possessionItem.Action?.toLowerCase()] || 'None');
             }
-            
-            const latestScore = data[data.length - 1];
-            if (latestScore) {
-              const scoreSoccer = latestScore.scoreSoccer || latestScore.ScoreSoccer || latestScore.Score;
-              const statusSoccerId = latestScore.statusSoccerId || latestScore.StatusSoccerId || latestScore.StatusId;
-              const dataSoccer = latestScore.dataSoccer || latestScore.DataSoccer || latestScore.Data;
-              const participant1Id = latestScore.participant1Id || latestScore.Participant1Id;
-              const participant2Id = latestScore.participant2Id || latestScore.Participant2Id;
-              const possessionType = latestScore.possessionType || latestScore.PossessionType;
-              const possibleEventSoccer = latestScore.possibleEventSoccer || latestScore.PossibleEventSoccer || latestScore.PossibleEvent;
+          }
 
-              if (scoreSoccer || statusSoccerId || dataSoccer) {
-                setScoreData({
-                  scoreSoccer: scoreSoccer,
-                  statusSoccerId: statusSoccerId,
-                  minutes: dataSoccer?.Minutes,
-                  participant1Id: participant1Id,
-                  participant2Id: participant2Id,
-                });
-              }
-              if (possessionType) {
-                setPossession(possessionType, possibleEventSoccer);
-              }
+          // ── Historical events (only on first load) ───────────────────────
+          if (useEventStore.getState().events.length === 0) {
+            const chronologicalData = [...data].sort((a: any, b: any) => (a.Ts || 0) - (b.Ts || 0));
+            const historyEvents: AlaniEvent[] = [];
+            let prevItem: any = null;
 
-              // Extract historical events for the feed
-              if (useEventStore.getState().events.length === 0) {
-                let prevData = null;
-                const historyEvents: AlaniEvent[] = [];
-                const chronologicalData = [...data].sort((a: any, b: any) => {
-                  const tA = a.Ts || a.ts || 0;
-                  const tB = b.Ts || b.ts || 0;
-                  return tA - tB;
-                });
-                for (const item of chronologicalData) {
-                  const pType = item.possessionType || item.PossessionType;
-                  const pEvents = item.possibleEventSoccer || item.PossibleEventSoccer || item.PossibleEvent;
-                  const score = item.scoreSoccer || item.ScoreSoccer || item.Score;
-                  const status = item.statusSoccerId || item.StatusSoccerId || item.StatusId;
-                  const dataSoc = item.dataSoccer || item.DataSoccer || item.Data;
-                  const p1 = item.participant1Id || item.Participant1Id;
-                  const p2 = item.participant2Id || item.Participant2Id;
-                  
-                  const eventData = { ...item, possessionType: pType, possibleEventSoccer: pEvents, scoreSoccer: score, statusSoccerId: status, dataSoccer: dataSoc, participant1Id: p1, participant2Id: p2 };
-                  
-                  // detectEvents is needed here, so we must import it if not imported. Wait, I should import it at the top of the file.
-                  
-                  const newEvs = detectEvents(eventData, prevData);
-                  for (const ev of newEvs) {
-                    historyEvents.push({
-                      ...ev,
-                      narratedText: `${ev.type.replace('_', ' ')} recorded at ${ev.minute}'`,
-                      narrateStatus: 'complete'
-                    } as AlaniEvent);
-                  }
-                  prevData = eventData;
-                }
-                historyEvents.forEach(ev => addEvent(ev));
+            for (const item of chronologicalData) {
+              const newEvs = detectEvents(item, prevItem);
+              for (const ev of newEvs) {
+                historyEvents.push({ ...ev, narratedText: '', narrateStatus: 'pending' } as AlaniEvent);
               }
+              prevItem = item;
+            }
+
+            historyEvents.forEach(ev => addEvent(ev));
+
+            // Claude narration: only for the 3 most recent meaningful events
+            const narratableEvents = historyEvents.filter(ev => !['KICKOFF', 'HALFTIME', 'FULLTIME', 'SUBSTITUTION'].includes(ev.type));
+            const recent = narratableEvents.slice(-3);
+
+            for (const ev of recent) {
+              triggerNarration(ev, fixtureId, {
+                homeTeamName: fixtureData?.Participant1 || 'Home',
+                awayTeamName: fixtureData?.Participant2 || 'Away',
+              });
+            }
+
+            // Older events get a simple text fallback
+            const older = historyEvents.filter(ev => !recent.includes(ev));
+            for (const ev of older) {
+              useEventStore.getState().updateEvent(ev.id, {
+                narratedText: ev.minute > 0 ? `${ev.type.replace(/_/g, ' ')} at ${ev.minute}'` : ev.type.replace(/_/g, ' '),
+                narrateStatus: 'complete',
+              });
             }
           }
         })
         .catch(console.error);
+    };
+
+    loadSnapshot();
+    const pollInterval = setInterval(loadSnapshot, 30_000);
+    return () => clearInterval(pollInterval);
   }, [fixtureId, setLineups, setScoreData, setPossession]);
 
   // Derive background tint from possession state

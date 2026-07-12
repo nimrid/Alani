@@ -34,8 +34,31 @@ export function AlaniMatchHeader({
   
   let homeScore = scoreSoccer?.Participant1?.Total?.Goals ?? 0;
   let awayScore = scoreSoccer?.Participant2?.Total?.Goals ?? 0;
-  let displayMinutes = minutes;
-  
+  let displayMinutes = minutes ?? 0;
+
+  // Live minute ticker — increments locally every 60s while match is running
+  // so the clock feels alive between 30s snapshot polls
+  const [tickedMinute, setTickedMinute] = useState<number | null>(null);
+
+  useEffect(() => {
+    // When we receive a new snapshot minute, reset the tick from that base
+    setTickedMinute(null);
+  }, [minutes]);
+
+  useEffect(() => {
+    const statusStr = String(statusSoccerId);
+    const running = ['2', '4', '6', '7'].includes(statusStr);
+    if (!running || minutes == null) return;
+    // Tick every 60 seconds starting from the snapshot minute
+    const base = tickedMinute ?? minutes;
+    const t = setInterval(() => {
+      setTickedMinute(prev => (prev ?? base) + 1);
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [statusSoccerId, minutes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const liveMinute = tickedMinute ?? minutes ?? 0;
+
   if (scrubMinute !== null && timelineData.length > 0) {
     const point = timelineData.find(p => p.minute === scrubMinute) || timelineData[timelineData.length - 1];
     if (point) {
@@ -43,6 +66,8 @@ export function AlaniMatchHeader({
       awayScore = Number(point.awayScore) || 0;
       displayMinutes = scrubMinute;
     }
+  } else {
+    displayMinutes = liveMinute;
   }
   
   const [prevHome, setPrevHome] = useState(homeScore);
@@ -76,27 +101,24 @@ export function AlaniMatchHeader({
     }
   }, [scoresConnected, disconnectedSince]);
 
-  const isHalfTime = statusSoccerId === 'HT2' || String(statusSoccerId) === '2';
-  const isFullTime = statusSoccerId === 'F2' || String(statusSoccerId) === '4' || String(statusSoccerId) === '8';
-  const isRunning = !isHalfTime && !isFullTime && statusSoccerId !== '' && statusSoccerId != null && String(statusSoccerId) !== '0';
+  // TxLINE StatusId: 1=pre, 2=1st, 3=HT, 4=2nd, 5=FT, 6=1ET, 7=2ET, 8=ET-HT, 9=Pens
+  const isHalfTime = String(statusSoccerId) === '3' || String(statusSoccerId) === '8';
+  const isFullTime = String(statusSoccerId) === '5';
+  const isRunning = ['2', '4', '6', '7', '9'].includes(String(statusSoccerId));
 
   const getPhaseText = () => {
     if (scrubMinute !== null) return 'Timeline Scrubbing';
-    if (isHalfTime) return 'Half Time';
-    if (isFullTime) return 'Full Time';
     switch (String(statusSoccerId)) {
-      case 'H11':
-      case '1': return '1st Half';
-      case 'H21':
-      case '3': return '2nd Half';
-      case 'ET1': return '1st Ext';
-      case 'ET2': return '2nd Ext';
-      case 'PE': return 'Penalties';
-      case '0':
-      case 'null':
-      case 'undefined':
-      case '': return 'Pre-Match';
-      default: return 'Live';
+      case '1': return 'Pre-Match';
+      case '2': return '1st Half';
+      case '3': return 'Half Time';
+      case '4': return '2nd Half';
+      case '5': return 'Full Time';
+      case '6': return '1st Extra Time';
+      case '7': return '2nd Extra Time';
+      case '8': return 'Extra Time HT';
+      case '9': return 'Penalties';
+      default: return statusSoccerId ? 'Live' : 'Pre-Match';
     }
   };
 
@@ -148,7 +170,10 @@ export function AlaniMatchHeader({
         className={`fixed inset-0 bg-white pointer-events-none z-50 transition-opacity duration-300 ease-out ${flashScore ? 'opacity-15' : 'opacity-0'}`}
       />
       <div className="w-full pt-12 pb-4 flex flex-col items-center justify-center bg-bg-base border-b border-border-subtle shrink-0 relative min-h-[140px]">
-        <div className="absolute top-4 left-4 z-10 cursor-pointer text-text-muted hover:text-text-primary text-sm font-bold tracking-wider uppercase" onClick={() => router.push('/')}>
+        <div
+          className="absolute top-4 left-4 z-10 cursor-pointer text-text-muted hover:text-text-primary active:scale-90 transition-all text-sm font-bold tracking-wider uppercase select-none"
+          onClick={() => router.push('/')}
+        >
           ← Back
         </div>
         <div className="absolute top-4 right-4 z-10 flex items-center gap-4">
@@ -189,6 +214,13 @@ export function AlaniMatchHeader({
             </span>
           </div>
         </div>
+
+        {/* Penalties badge */}
+        {String(statusSoccerId) === '9' && (
+          <div className="mt-1 text-[11px] font-bold tracking-wider uppercase text-chain-purple text-center">
+            Penalty Shootout
+          </div>
+        )}
 
         {/* Match Clock & Phase */}
         <div className="mt-3 text-sm text-text-secondary font-sans flex items-center justify-center">

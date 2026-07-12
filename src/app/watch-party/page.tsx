@@ -28,6 +28,7 @@ export default function WatchPartyPage() {
   
   const [parties, setParties] = useState<any[]>(MOCK_PARTIES);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -129,9 +130,11 @@ export default function WatchPartyPage() {
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onClick={evt => setSelectedLocation({ lat: evt.lngLat.lat, lng: evt.lngLat.lng })}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
+        cursor="crosshair"
       >
         <GeolocateControl position="top-right" style={{ marginTop: '4rem', marginRight: '0.5rem' }} />
         <NavigationControl position="top-right" style={{ marginRight: '0.5rem' }} />
@@ -146,10 +149,26 @@ export default function WatchPartyPage() {
             </div>
           </Marker>
         )}
+
+        {selectedLocation && (
+          <Marker longitude={selectedLocation.lng} latitude={selectedLocation.lat} anchor="bottom">
+            <div className="flex flex-col items-center">
+              <div className="bg-high-danger px-2 py-1 rounded shadow-lg text-xs font-bold text-white mb-1">
+                Selected
+              </div>
+              <MapPin size={36} className="text-high-danger fill-bg-surface drop-shadow-md" />
+            </div>
+          </Marker>
+        )}
       </Map>
 
       {/* Floating Action Button */}
-      <div className="absolute bottom-8 inset-x-0 flex justify-center z-10 pointer-events-none">
+      <div className="absolute bottom-8 inset-x-0 flex flex-col justify-center items-center gap-3 z-10 pointer-events-none">
+        {!selectedLocation && (
+          <div className="bg-bg-elevated/90 backdrop-blur text-text-muted text-xs px-4 py-2 rounded-full border border-border-subtle shadow-sm pointer-events-auto">
+            Tap the map to choose a location
+          </div>
+        )}
         <button 
           onClick={() => setShowForm(true)}
           className="pointer-events-auto bg-chain-purple hover:bg-chain-purple/90 text-white font-bold py-3 px-6 rounded-full shadow-lg border border-white/10 flex items-center gap-2 transform transition-transform hover:scale-105"
@@ -162,8 +181,8 @@ export default function WatchPartyPage() {
 
       {showForm && (
         <WatchPartyForm 
-          latitude={userLocation?.lat || viewState.latitude}
-          longitude={userLocation?.lng || viewState.longitude}
+          latitude={selectedLocation?.lat || userLocation?.lat || viewState.latitude}
+          longitude={selectedLocation?.lng || userLocation?.lng || viewState.longitude}
           onClose={() => setShowForm(false)}
           onSuccess={handleRegisterSuccess}
         />

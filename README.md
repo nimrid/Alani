@@ -1,6 +1,27 @@
-# Pulse
+# Alani
 
-Pulse is a real-time football (soccer) dashboard that ingests live data from TxLINE and visualizes match momentum, odds shifts, and events on an interactive, immersive interface. It includes verifiable event proofs minted on the Solana blockchain, community-focused features, and an AI-driven commentator.
+Alani is a real-time football (soccer) dashboard that ingests live data from TxLINE and visualizes match momentum, odds shifts, and events on an interactive, immersive interface. It includes verifiable event proofs minted on the Solana blockchain, community-focused features, and an AI-driven commentator.
+
+## Built on Real Fan Insights
+
+We didn't just build based on vibes. Before writing code, we surveyed fans on X (Twitter) during the 2026 World Cup to understand their actual pain points with the official apps and the overall viewing experience. The feedback revealed clear gaps:
+- **Official App Issues:** Buggy, ad-heavy navigation that traps users, lacks deep stats, and fails at personalization.
+- **Matchday & Viewing Experience:** A hyper-commercial, TV-first feel that lacks atmosphere for remote viewers and fails to explain crucial moments (like VAR decisions) clearly.
+- **Community Disconnect:** Awful broadcast times for international fans and a lack of tools to foster real community beyond generic chat rooms.
+
+Instead of building a generic sports app, we asked how TxLINE's real-time, normalized, and timestamped data could solve these specific frustrations. We mapped these insights directly to Alani's core features:
+
+- **"I can't be at the stadium and my TV feels lonely."**
+  *The Insight:* Fans watching remotely don't just miss information—they miss feeling the room react with them.
+  *Our Solution:* **The Danger Meter & Pulse**. A live atmosphere layer that visualizes match momentum and stats swings in real-time, syncing viewers to the actual tension of the match.
+
+- **"VAR just overturned a goal and nobody explains why—I just feel robbed."**
+  *The Insight:* Fans need to understand not just *what* happened, but *how much it mattered* to the game's outcome.
+  *Our Solution:* **The Analyst**. An AI football pundit that instantly provides plain-language explanations of complex events and real-time odds swings, quantifying the exact impact of every decision.
+
+- **"My friends are scattered across time zones, and the community aspect is missing."**
+  *The Insight:* Official apps feel corporate, ad-heavy, and lack tools for fans to connect locally when matches are at awkward hours.
+  *Our Solution:* **Watch Party Near Me**. A geo-based community map that empowers fans to find, pin, and organize local watch parties, turning a disconnected global broadcast into a shared local experience.
 
 ## Features
 
@@ -13,7 +34,7 @@ Pulse is a real-time football (soccer) dashboard that ingests live data from TxL
 
 ## Architecture
 
-Pulse is built using a modern, scalable Web3 technology stack:
+Alani is built using a modern, scalable Web3 technology stack:
 
 ```mermaid
 graph TD
@@ -116,8 +137,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - **On-chain proof runs asynchronously.** Verification can lag 10–30 seconds depending on Solana devnet congestion. We do not block the UI while waiting for confirmation.
 - **SSE proxy adds one network hop.** We tunnel the raw TxLINE TCP feed through a Next.js Edge route to convert it to SSE for the browser. In production, a dedicated WebSocket gateway in Rust or Go would slice 20-40ms off the delivery time.
 
-## What's Next
+## What's Next (Future Vision)
 
+Our roadmap is driven by the same philosophy: solving real fan problems using TxLINE's unique data shape. Future features we are exploring include:
+
+- **"Longshot" (Underdog Discovery):** Why is every app built for the neutral fan? Longshot surfaces giant-killing opportunities as they happen by watching odds drift across *all* active games at once. It turns TxLINE's cross-competition schema into a discovery engine: *"A team you've never heard of just became a 40% chance to beat a former champion—watch now."*
+- **The Recap Engine:** For fans who fell asleep during the late kickoff, this generates a personalized, spoiler-paced digest built from the actual score/odds event timeline rather than a human-edited highlight reel. It reconstructs the emotional arc of the match based on market volatility, pacing the reveal so tension builds just as it did live.
+- **Asynchronous Watch Parties:** Solving the international kickoff problem. Friends record short reactions pinned to match-clock timestamps. The app resurfaces your friend's reaction to you at the *exact moment* you hit that point in the match, even if they watched it eight hours earlier, using TxLINE's cryptographically verified event timestamps.
+- **Adopt a Team:** A top-of-funnel feature for casual fans. Based on a quick quiz, the app assigns you a team and feeds you just enough context before each match—one storyline, one player, one stat that matters—sourced directly from TxLINE data to make the tournament accessible to newcomers.
 - **Predictive Event Queuing:** Using historical sequences to pre-warm the UI for likely upcoming events before the TCP packet arrives.
 - **Deep Solana Integration:** Minting the verifiable event proofs as compressed NFTs (cNFTs) to serve as a persistent "Fan Passport" across the ecosystem.
-- **Micro-Betting Hooks:** Exposing the raw odds stream to a smart contract to allow localized, in-play wagers on the next 5-minute event window.

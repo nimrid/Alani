@@ -36,7 +36,7 @@ export function KickoffReminder({ fixtureId, startTime, participant1, participan
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('⚽ Kickoff in 15 minutes', {
               body: `${participant1} vs ${participant2} · ${groupName} · Starting soon`,
-              icon: '/pulse-icon.png'
+              icon: '/alani-icon.png'
             });
           }
         }

@@ -1900,6 +1900,23 @@
       ]
     }
   ],
+  "types": [
+    {
+      "name": "StatTerm",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "goalsSoccer" },
+          { "name": "cornersSoccer" },
+          { "name": "redCardsSoccer" },
+          { "name": "yellowCardsSoccer" },
+          { "name": "offsidesSoccer" },
+          { "name": "shotsOnTargetSoccer" },
+          { "name": "foulsSoccer" }
+        ]
+      }
+    }
+  ],
   "errors": [
     {
       "code": 6000,

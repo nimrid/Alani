@@ -21,16 +21,20 @@ export async function POST(req: NextRequest) {
       scoreBefore,
       scoreAfter,
       playerName,
+      playerTeam,
+      playerInName,
+      playerOutName,
       goalType,
       winPctBefore,
       winPctAfter,
       varDecision
     } = body;
 
-    // Create a context string for the AI
-    let eventContext = `Minute: ${minute}'\nEvent: ${eventType}\nTeams: ${team1Name} vs ${team2Name}\n`;
+    // Build rich context for the AI
+    let eventContext = `Minute: ${minute}'\nEvent: ${eventType}\nHome Team: ${team1Name}\nAway Team: ${team2Name}\n`;
+    if (playerName) eventContext += `Player involved: ${playerName}${playerTeam ? ` (${playerTeam})` : ''}\n`;
+    if (playerInName && playerOutName) eventContext += `Substitution: ${playerInName} comes on for ${playerOutName}\n`;
     if (scoreBefore && scoreAfter) eventContext += `Score changed from ${scoreBefore} to ${scoreAfter}\n`;
-    if (playerName) eventContext += `Player involved: ${playerName}\n`;
     if (goalType) eventContext += `Goal Type: ${goalType}\n`;
     if (winPctBefore && winPctAfter) {
       const diff = winPctAfter - winPctBefore;
@@ -39,10 +43,10 @@ export async function POST(req: NextRequest) {
     }
     if (varDecision) eventContext += `VAR Decision: ${varDecision}\n`;
 
-    const systemPrompt = `You are a sharp, knowledgeable football commentator writing for a second-screen companion app. Write ONE sentence — max 25 words — that captures what just happened and why it matters. Be specific, be vivid, never generic. No filler phrases like 'what a moment' or 'incredible scenes'. If the market moved, say by how much and in which direction. Tone: intelligent, immediate, fan-facing.`;
+    const systemPrompt = `You are a sharp, knowledgeable football commentator writing for a second-screen companion app. Write ONE sentence — max 25 words — that captures what just happened and why it matters. Be specific, be vivid, never generic. Use the player's real name and the actual team name if provided. No filler phrases like 'what a moment' or 'incredible scenes'. Tone: intelligent, immediate, fan-facing.`;
 
     const stream = await anthropic.messages.stream({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5',
       max_tokens: 60,
       system: systemPrompt,
       messages: [

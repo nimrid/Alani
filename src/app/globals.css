@@ -23,6 +23,7 @@
   --color-odds-up: #22C55E;
   --color-odds-down: #EF4444;
   --color-chain: #9945FF;
+  --color-chain-purple: #9945FF;
 
   --font-sans: var(--font-inter), sans-serif;
   --font-mono: var(--font-jetbrains-mono), monospace;
@@ -49,6 +50,9 @@ body {
   .spin-slow {
     animation: spin 2s linear infinite;
   }
+  .animate-spin-slow {
+    animation: spin-slow 8s linear infinite;
+  }
 }
 
 @keyframes pulse-safe {
@@ -68,6 +72,10 @@ body {
   50% { transform: scale(1.12); }
 }
 @keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes spin-slow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }

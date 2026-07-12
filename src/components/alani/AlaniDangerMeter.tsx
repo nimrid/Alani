@@ -36,12 +36,12 @@ function getPossessionConfig(type: PossessionType, goalImminent: boolean, connec
       return {
         color: 'var(--color-safe)',
         pulseClass: 'pulse-safe',
-        ringOpacity: 0.3,
+        ringOpacity: 0.35,
         label: type === 'None' ? 'WAITING' : 'SAFE',
         glow: 'none',
         glowBlur: '0px',
         labelStyle: 'text-lg text-safe',
-        innerRingSpin: false,
+        innerRingSpin: true,   // slow ambient rotation
       };
     case 'AttackPossession':
       return {
@@ -139,17 +139,24 @@ export function AlaniDangerMeter({ loading = false }: { loading?: boolean }) {
             className="transition-all duration-400 ease-in-out"
             filter="drop-shadow(0 0 8px currentColor)"
           />
-          {/* Inner ring */}
+          {/* Inner ring — spins slowly for ambient states, fast for danger */}
           <circle
             cx="100"
             cy="100"
             r="80"
             fill="none"
             stroke={config.color}
-            strokeWidth="2"
-            opacity={Math.max(0.2, config.ringOpacity - 0.2)}
-            className={`transition-all duration-400 ease-in-out ${config.innerRingSpin ? 'spin-slow origin-center' : ''}`}
-            strokeDasharray={config.innerRingSpin ? "20 10" : "none"}
+            strokeWidth="1.5"
+            opacity={Math.max(0.15, config.ringOpacity - 0.2)}
+            className={`transition-all duration-400 ease-in-out ${
+              config.innerRingSpin && (config.label === 'SAFE' || config.label === 'WAITING')
+                ? 'animate-spin-slow'
+                : config.innerRingSpin
+                ? 'spin-slow origin-center'
+                : ''
+            }`}
+            strokeDasharray={config.innerRingSpin ? '12 8' : 'none'}
+            style={{ transformOrigin: '100px 100px' }}
           />
         </svg>
 

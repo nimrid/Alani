@@ -107,7 +107,7 @@ export function TheAnalyst({ eventQueue, isReplayMode, collapsed, onToggleCollap
       if (value) chunks.push(value);
     }
     
-    const blob = new Blob(chunks, { type: 'audio/mpeg' });
+    const blob = new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
     const arrayBuffer = await blob.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     

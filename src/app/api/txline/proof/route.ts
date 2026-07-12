@@ -18,9 +18,18 @@ export async function GET(request: NextRequest) {
     
     const upstreamUrl = `${TXLINE_CONFIG.apiBase}/scores/proof/${fixtureId}?epochDay=${epochDay}&ts=${ts}`;
     
-    const upstreamResponse = await fetch(upstreamUrl, {
+    let upstreamResponse = await fetch(upstreamUrl, {
       headers: { ...txLineHeaders },
     });
+
+    if (upstreamResponse.status === 401) {
+      console.log("JWT expired, fetching new guest token...");
+      const newJwt = await getGuestJWT();
+      txLineHeaders['Authorization'] = `Bearer ${newJwt}`;
+      upstreamResponse = await fetch(upstreamUrl, {
+        headers: { ...txLineHeaders },
+      });
+    }
 
     if (!upstreamResponse.ok) {
       return NextResponse.json({ error: 'Failed to fetch proof' }, { status: upstreamResponse.status });

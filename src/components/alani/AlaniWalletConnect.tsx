@@ -46,6 +46,10 @@ export function AlaniWalletConnect() {
       };
       
       checkProfile();
+
+      const handleUpdate = () => checkProfile();
+      window.addEventListener('alani_form_score_updated', handleUpdate);
+      return () => window.removeEventListener('alani_form_score_updated', handleUpdate);
     }
   }, [connected, publicKey]);
 
