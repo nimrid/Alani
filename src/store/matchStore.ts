@@ -79,6 +79,7 @@ export interface AlaniEvent {
     homeWinBefore: number;
     homeWinAfter: number;
   } | null;
+  score?: { home: number; away: number };
 }
 
 interface EventState {

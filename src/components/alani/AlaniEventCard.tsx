@@ -28,15 +28,21 @@ function resolvePlayerName(playerId: number | undefined | null): string {
 }
 
 /** Extract the score at the time of an event from event data */
-function extractEventScore(data: any): string {
-  // Try rich Score object first (TxLINE format)
-  const score = data?.Score || data?.score;
-  const stats = data?.stats || data?.Stats;
+function extractEventScore(event: AlaniEvent): string {
+  // 1. Use the explicitly attached running score (new logic)
+  if (event.score) {
+    return `${event.score.home} – ${event.score.away}`;
+  }
 
-  const homeG = score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? null;
-  const awayG = score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? null;
+  // 2. Legacy fallback: check the event's raw payload for a Score object
+  const score = event.data?.Score || event.data?.score;
+  if (score) {
+    const homeG = score.Participant1?.Total?.Goals ?? 0;
+    const awayG = score.Participant2?.Total?.Goals ?? 0;
+    return `${homeG} – ${awayG}`;
+  }
 
-  if (homeG !== null && awayG !== null) return `${homeG} – ${awayG}`;
+  // Never fall back to Stats because Stats['2'] is corners, not goals!
   return '';
 }
 
@@ -51,7 +57,7 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
     const label =
       type === 'HALFTIME' ? 'Half Time' :
       type === 'FULLTIME' ? 'Full Time' : 'Kick Off';
-    const scoreStr = extractEventScore(data);
+    const scoreStr = extractEventScore(event);
     return (
       <div className="w-full py-4 my-2 flex flex-col items-center justify-center bg-bg-surface border-y border-border-subtle animate-slide-up">
         <span className="font-display text-text-muted text-lg tracking-widest uppercase">
@@ -152,7 +158,7 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
   }
 
   // Score at the moment this event happened
-  const scoreStr = extractEventScore(data);
+  const scoreStr = extractEventScore(event);
 
   return (
     <div

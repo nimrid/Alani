@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Play, SkipBack, SkipForward, Clock } from 'lucide-react';
 import { getFlag } from '@/lib/alani/utils';
 
+import ReactMarkdown from 'react-markdown';
+
 interface ReplayEvent {
   action: string;
   minute: number;
@@ -33,6 +35,47 @@ export default function ReplayPage() {
   const [playheadIdx, setPlayheadIdx] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisText, setAnalysisText] = useState('');
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
+  const startAnalysis = async () => {
+    if (analysisText) {
+      setShowAnalysis(true);
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setShowAnalysis(true);
+    setAnalysisText('');
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchInfo, events })
+      });
+
+      if (!res.ok) throw new Error('Analysis failed');
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setAnalysisText(prev => prev + decoder.decode(value, { stream: true }));
+      }
+    } catch (err) {
+      console.error(err);
+      setAnalysisText('Failed to generate analysis. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   useEffect(() => {
     if (!fixtureId) { setLoading(false); return; }
 
@@ -43,40 +86,53 @@ export default function ReplayPage() {
 
         const sorted = [...data].sort((a, b) => (a.Ts || 0) - (b.Ts || 0));
 
-        // Extract match info from latest stats item
-        const withStats = [...sorted].filter(d => d.Stats && Object.keys(d.Stats).length > 0)
-          .sort((a, b) => (b.Ts || 0) - (a.Ts || 0));
-        const latest = withStats[0];
-        if (latest) {
-          const score = latest.Score;
-          const stats = latest.Stats;
-          const lineupItem = data.find((d: any) => d.Action === 'lineups' && d.Lineups);
-          setMatchInfo({
-            home: lineupItem?.Lineups?.[0]?.preferredName || 'Home',
-            away: lineupItem?.Lineups?.[1]?.preferredName || 'Away',
-            homeGoals: score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? 0,
-            awayGoals: score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? 0,
-            competition: latest.Competition || 'Match Replay',
-            statusId: String(latest.StatusId ?? '5'),
-          });
+        // Get Lineups for Player names
+        const lineupItem = data.find((d: any) => d.Action === 'lineups' && d.Lineups);
+        const playerNames: Record<number, string> = {};
+        if (lineupItem) {
+          for (const team of lineupItem.Lineups) {
+            for (const p of (team.lineups || [])) {
+              if (p.player?.preferredName) {
+                if (p.fixturePlayerId) playerNames[p.fixturePlayerId] = p.player.preferredName;
+                if (p.player.normativeId) playerNames[Number(p.player.normativeId)] = p.player.preferredName;
+              }
+            }
+          }
         }
+
+        // Extract match info from best Score object
+        const withScore = [...sorted].filter(d => d.Score).sort((a, b) => (b.Ts || 0) - (a.Ts || 0));
+        const bestScore = withScore[0]?.Score;
+        const latestStats = [...sorted].filter(d => d.Stats).sort((a, b) => (b.Ts || 0) - (a.Ts || 0))[0];
+
+        setMatchInfo({
+          home: lineupItem?.Lineups?.[0]?.preferredName || 'Home',
+          away: lineupItem?.Lineups?.[1]?.preferredName || 'Away',
+          homeGoals: bestScore?.Participant1?.Total?.Goals ?? 0,
+          awayGoals: bestScore?.Participant2?.Total?.Goals ?? 0,
+          competition: latestStats?.Competition || 'Match Replay',
+          statusId: String(latestStats?.StatusId ?? '5'),
+        });
 
         // Build timeline of significant events
         const significantActions = new Set([
           'goal', 'yellow_card', 'red_card', 'var', 'var_end',
-          'substitution', 'penalty', 'kickoff', 'halftime_finalised',
-          'status', 'corner', 'shot', 'injury',
+          'substitution', 'penalty', 'penalty_outcome', 'kickoff', 'halftime_finalised',
+          'status', 'corner', 'shot', 'injury', 'foul', 'offside'
         ]);
 
         const replayEvs: ReplayEvent[] = sorted
           .filter(d => d.Action && significantActions.has(d.Action.toLowerCase()))
-          .map(d => ({
-            action: d.Action.toLowerCase(),
-            minute: d.Clock?.Seconds != null ? Math.floor(d.Clock.Seconds / 60) : 0,
-            participant: d.Participant ?? null,
-            data: d.Data || {},
-            ts: d.Ts || 0,
-          }));
+          .map(d => {
+            const pid = d.Data?.PlayerId || d.Data?.PlayerInId;
+            return {
+              action: d.Action.toLowerCase(),
+              minute: d.Clock?.Seconds != null ? Math.floor(d.Clock.Seconds / 60) : 0,
+              participant: d.Participant ?? null,
+              data: { ...d.Data, playerName: pid ? playerNames[pid] : undefined },
+              ts: d.Ts || 0,
+            };
+          });
 
         setEvents(replayEvs);
         setLoading(false);
@@ -142,6 +198,53 @@ export default function ReplayPage() {
         </span>
       </header>
 
+      <div className="max-w-lg mx-auto w-full px-4 pt-6">
+        <button
+          onClick={startAnalysis}
+          disabled={isAnalyzing}
+          className="relative w-full overflow-hidden flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-chain-purple to-[#4F46E5] text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)] hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-[0_0_20px_rgba(124,58,237,0.3)]"
+        >
+          {isAnalyzing && (
+            <div className="absolute inset-0 bg-white/10 animate-pulse" />
+          )}
+          {isAnalyzing ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin relative z-10" />
+              <span className="relative z-10">Generating Analysis...</span>
+            </>
+          ) : showAnalysis ? (
+            '✨ Regenerate Technical Analysis'
+          ) : (
+            '✨ Alani Technical Analysis'
+          )}
+        </button>
+
+        {showAnalysis && (
+          <div className="relative mt-6 p-6 bg-bg-surface/80 backdrop-blur-md border border-chain-purple/20 rounded-2xl animate-fade-in text-sm leading-relaxed shadow-xl shadow-chain-purple/5">
+            <div className="absolute -top-3 left-6 px-3 py-0.5 bg-bg-elevated border border-chain-purple/30 rounded-full text-[10px] font-bold text-chain-purple tracking-widest uppercase shadow-sm">
+              Alani Insights
+            </div>
+            
+            {analysisText ? (
+              <div className="prose prose-invert prose-p:text-text-secondary prose-headings:text-text-primary prose-a:text-chain-purple max-w-none pt-2">
+                <ReactMarkdown>{analysisText}</ReactMarkdown>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-text-muted">
+                <div className="relative w-12 h-12 mb-4 flex items-center justify-center">
+                  <div className="absolute inset-0 border-2 border-chain-purple/20 rounded-full" />
+                  <div className="absolute inset-0 border-2 border-chain-purple border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xl animate-pulse">🤖</span>
+                </div>
+                <p className="font-medium bg-gradient-to-r from-text-primary to-text-muted bg-clip-text text-transparent animate-pulse">
+                  Alani is reviewing the match footage...
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Timeline */}
       <main className="flex-1 overflow-y-auto p-4 pb-32 max-w-lg mx-auto w-full">
         {loading ? (
@@ -192,8 +295,10 @@ export default function ReplayPage() {
                         <span className={`text-sm font-bold ${isGoal ? 'text-[var(--color-goal)]' : 'text-text-primary'}`}>
                           {ev.action.replace(/_/g, ' ').toUpperCase()}
                         </span>
-                        {ev.data?.PlayerId && (
-                          <span className="text-xs text-text-muted ml-2">#{ev.data.PlayerId}</span>
+                        {(ev.data?.playerName || ev.data?.PlayerId) && (
+                          <span className="text-xs text-text-muted ml-2">
+                            {ev.data.playerName ? ev.data.playerName : `#${ev.data.PlayerId}`}
+                          </span>
                         )}
                       </div>
                       {ev.minute > 0 && (

@@ -72,13 +72,13 @@ export function useTxLineStream(
             useLineupStore.getState().setLineups(lineups);
           }
 
-          // ── Score (only update when we have Score or real Stats) ────────
+          // ── Score (only update when we have a Score object) ──────────────
           const score: Record<string, any> | undefined = data.Score || data.score;
-          if (score || (stats && Object.keys(stats).length > 0)) {
-            // Primary: Score.Participant1.Total.Goals (includes ET/pens correctly)
-            // Fallback: Stats["2"] home, Stats["1002"] away
-            const home = score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? 0;
-            const away = score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? 0;
+          if (score) {
+            // Score and Stats use DIFFERENT numbering — never mix them.
+            // Missing Goals key in Score means 0, not "use Stats fallback".
+            const home = score.Participant1?.Total?.Goals ?? 0;
+            const away = score.Participant2?.Total?.Goals ?? 0;
             const liveMinutes = clockToMinute(clock);
 
             useScoreStore.getState().setScoreData({
@@ -92,11 +92,12 @@ export function useTxLineStream(
               participant2Id: data.Participant2Id ?? null,
             });
           } else if (statusId != null) {
-            // Status-only update (no stats yet) — just update the phase
+            // Status-only update (no Score yet) — just update the phase
             useScoreStore.getState().setScoreData({
               statusSoccerId: String(statusId),
             });
           }
+
 
           // ── Possession ───────────────────────────────────────────────────
           if (action in ACTION_TO_POSSESSION) {
@@ -109,8 +110,13 @@ export function useTxLineStream(
           const newEvents = detectEvents(data, prevDataRef.current);
           prevDataRef.current = data;
 
+          const currentScore = useScoreStore.getState().scoreSoccer;
+          const homeG = currentScore?.Participant1?.Total?.Goals ?? 0;
+          const awayG = currentScore?.Participant2?.Total?.Goals ?? 0;
+
           for (const ev of newEvents) {
-            useEventStore.getState().addEvent(ev as AlaniEvent);
+            const evWithScore = { ...ev, score: { home: homeG, away: awayG } } as AlaniEvent;
+            useEventStore.getState().addEvent(evWithScore);
             getCrowdAudio().playEvent(ev.type);
 
             if (ev.type === 'SUBSTITUTION') {

@@ -24,13 +24,25 @@ export default function ProfilePage() {
     const loadData = async () => {
       const address = publicKey.toBase58();
       
-      const [profileRes, eventsRes] = await Promise.all([
+      const [profileRes, eventsRes, fixturesRes] = await Promise.all([
         supabase.from('fan_profiles').select('*').eq('wallet_address', address).single(),
-        supabase.from('fan_events').select('*').eq('wallet_address', address).order('event_ts', { ascending: false })
+        supabase.from('fan_events').select('*').eq('wallet_address', address).order('event_ts', { ascending: false }),
+        fetch('/api/txline/fixtures').then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
 
       if (profileRes.data) setProfile(profileRes.data);
-      if (eventsRes.data) setEvents(eventsRes.data);
+      if (eventsRes.data) {
+        const fixturesMap = new Map();
+        if (Array.isArray(fixturesRes)) {
+          fixturesRes.forEach(f => fixturesMap.set(String(f.FixtureId), `${f.Participant1} vs ${f.Participant2}`));
+        }
+        
+        const enrichedEvents = eventsRes.data.map((ev: any) => ({
+          ...ev,
+          fixture_name: fixturesMap.get(String(ev.fixture_id)) || `Fixture #${ev.fixture_id}`
+        }));
+        setEvents(enrichedEvents);
+      }
       
       setIsLoading(false);
     };
@@ -110,7 +122,7 @@ export default function ProfilePage() {
                       <span className="font-bold text-text-primary">{event.event_type}</span>
                       <span className="text-xs font-mono bg-bg-elevated text-text-secondary px-1.5 py-0.5 rounded">{event.event_minute}'</span>
                     </div>
-                    <div className="text-sm text-text-muted">Fixture #{event.fixture_id}</div>
+                    <div className="text-sm text-text-muted">{event.fixture_name || `Fixture #${event.fixture_id}`}</div>
                   </div>
                   
                   {event.verified ? (

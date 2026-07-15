@@ -9,6 +9,8 @@ export function getFlag(countryName: string): string {
 }
 
 export function getGroupName(groupId?: number): string {
+  if (groupId === 10115572) return 'Final';
+  if (groupId === 10115573) return 'Semi-Finals';
   if (groupId === 10115574) return 'Round of 16';
   if (groupId === 10115675) return 'Quarter-Finals';
   if (groupId === 10116166) return 'Friendlies';

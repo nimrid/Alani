@@ -28,16 +28,35 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
   useTxLineStream(fixtureId, 'odds');
 
   useEffect(() => {
-    fetch('/api/txline/fixtures')
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch fixture metadata");
-        return res.json();
-      })
-      .then(data => {
-        const fixture = data?.find?.((f: any) => f.FixtureId.toString() === fixtureId);
-        if (fixture) setFixtureData(fixture);
-      })
-      .catch(err => console.error("Failed to fetch fixture metadata", err));
+    let cancelled = false;
+
+    const fetchFixture = (attempt = 0) => {
+      fetch('/api/txline/fixtures')
+        .then(res => {
+          if (!res.ok) {
+            // Retry once after 1.5s (handles cold-start Turbopack compilation)
+            if (attempt === 0 && !cancelled) {
+              setTimeout(() => fetchFixture(1), 1500);
+            } else {
+              console.warn('Fixture metadata unavailable — match will still work with defaults');
+            }
+            return null;
+          }
+          return res.json();
+        })
+        .then(data => {
+          if (!data || cancelled) return;
+          const fixture = data?.find?.((f: any) => f.FixtureId.toString() === fixtureId);
+          if (fixture) setFixtureData(fixture);
+        })
+        .catch(() => {
+          if (attempt === 0 && !cancelled) setTimeout(() => fetchFixture(1), 1500);
+          else console.warn('Fixture metadata fetch failed — using defaults');
+        });
+    };
+
+    fetchFixture();
+    return () => { cancelled = true; };
   }, [fixtureId]);
 
   const possessionType = usePossessionStore((state) => state.possessionType);
@@ -91,10 +110,24 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
             const stats = latestWithStats.Stats;
             const score: any = latestWithStats.Score;
 
-            // Primary: use Score.Participant1.Total.Goals (most reliable, includes ET/pens)
-            // Fallback: Stats["2"] = home goals, Stats["1002"] = away goals
-            const homeGoals = score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? 0;
-            const awayGoals = score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? 0;
+            // IMPORTANT: Score and Stats use different numbering.
+            // When Score object exists, use it exclusively — missing Goals key means 0.
+            // Only fall back to Stats when there is no Score at all (early pre-match items).
+            let homeGoals: number;
+            let awayGoals: number;
+            if (score) {
+              // Score.Participant1/2.Total.Goals — missing key = 0 goals (team hasn't scored)
+              homeGoals = score.Participant1?.Total?.Goals ?? 0;
+              awayGoals = score.Participant2?.Total?.Goals ?? 0;
+            } else {
+              // No Score object — scan earlier items that might have one
+              const withScore = data
+                .filter((d: any) => d.Score)
+                .sort((a: any, b: any) => (b.Ts || 0) - (a.Ts || 0));
+              const sc = withScore[0]?.Score;
+              homeGoals = sc?.Participant1?.Total?.Goals ?? 0;
+              awayGoals = sc?.Participant2?.Total?.Goals ?? 0;
+            }
 
             // StatusId: 1=pre, 2=1st, 3=HT, 4=2nd, 5=FT, 6=1ET, 7=2ET, 8=ET-HT, 9=Pens
             const statusId = String(latestWithStats.StatusId ?? '');
@@ -133,11 +166,24 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
             const chronologicalData = [...data].sort((a: any, b: any) => (a.Ts || 0) - (b.Ts || 0));
             const historyEvents: AlaniEvent[] = [];
             let prevItem: any = null;
+            let runningHomeGoals = 0;
+            let runningAwayGoals = 0;
 
             for (const item of chronologicalData) {
+              // Track running score based on Score object
+              if (item.Score) {
+                runningHomeGoals = item.Score.Participant1?.Total?.Goals ?? 0;
+                runningAwayGoals = item.Score.Participant2?.Total?.Goals ?? 0;
+              }
+
               const newEvs = detectEvents(item, prevItem);
               for (const ev of newEvs) {
-                historyEvents.push({ ...ev, narratedText: '', narrateStatus: 'pending' } as AlaniEvent);
+                historyEvents.push({
+                  ...ev,
+                  score: { home: runningHomeGoals, away: runningAwayGoals },
+                  narratedText: '',
+                  narrateStatus: 'pending'
+                } as AlaniEvent);
               }
               prevItem = item;
             }

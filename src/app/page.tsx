@@ -63,14 +63,21 @@ async function fetchMatchStatus(fixtureId: number): Promise<{
     const latest = withData[0];
     if (!latest) return { homeGoals: 0, awayGoals: 0, minute: 0, statusId: '' };
 
-    const score = latest.Score;
-    const stats = latest.Stats;
-    const homeGoals = score?.Participant1?.Total?.Goals ?? stats?.['2'] ?? 0;
-    const awayGoals = score?.Participant2?.Total?.Goals ?? stats?.['1002'] ?? 0;
-    const minute = latest.Clock?.Seconds != null ? Math.floor(latest.Clock.Seconds / 60) : 0;
-    const statusId = String(latest.StatusId ?? '');
+    // Find the best Score object across ALL snapshot items (not just latest-with-Stats)
+    // Score and Stats use DIFFERENT numbering — never mix them.
+    const withScore = [...data]
+      .filter(d => d.Score)
+      .sort((a, b) => (b.Ts || 0) - (a.Ts || 0));
+    const bestScore = withScore[0]?.Score;
+
+    // Missing Goals key in Score means 0 (team hasn't scored yet)
+    const homeGoals = bestScore?.Participant1?.Total?.Goals ?? 0;
+    const awayGoals = bestScore?.Participant2?.Total?.Goals ?? 0;
+    const minute = latest?.Clock?.Seconds != null ? Math.floor(latest.Clock.Seconds / 60) : 0;
+    const statusId = String(latest?.StatusId ?? '');
 
     return { homeGoals, awayGoals, minute, statusId };
+
   } catch {
     return { homeGoals: 0, awayGoals: 0, minute: 0, statusId: '' };
   }

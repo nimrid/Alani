@@ -8,8 +8,12 @@ export async function GET(request: NextRequest) {
     const apiToken = process.env.TXLINE_DEV_API_TOKEN || 'mock-api-token';
     const txLineHeaders = buildTxLineHeaders(jwt, apiToken);
     
-    const upstreamUrl = `${TXLINE_CONFIG.apiBase}/fixtures/snapshot`;
-    
+    const { searchParams } = new URL(request.url);
+    if (!searchParams.has('startEpochDay')) {
+      const epochDay = Math.floor(Date.now() / 86400000);
+      searchParams.set('startEpochDay', (epochDay - 14).toString());
+    }
+    const upstreamUrl = `${TXLINE_CONFIG.apiBase}/fixtures/snapshot?${searchParams.toString()}`;
     const upstreamResponse = await fetch(upstreamUrl, {
       headers: { ...txLineHeaders },
     });
