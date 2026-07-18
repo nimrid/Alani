@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-// Safety gate: this page must never be accessible in production
-if (process.env.NODE_ENV === 'production') {
-  throw new Error('Debug page is not available in production.');
-}
+import { notFound } from 'next/navigation';
 
 export default function DebugPage() {
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
   const [jwt, setJwt] = useState<string | null>(null);
   const [fixtures, setFixtures] = useState<any[]>([]);
   const [selectedFixture, setSelectedFixture] = useState<string | null>(null);

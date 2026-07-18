@@ -368,6 +368,92 @@ npm run dev
 
 ---
 
+## TxLINE Endpoints Used
+
+All requests are authenticated with two headers: `Authorization: Bearer <JWT>` and `X-Api-Token: <apiToken>`. The JWT is obtained from `POST /auth/guest/start` and expires after 30 days. Both headers are required on every data call.
+
+### Auth
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `POST /auth/guest/start` | REST | Obtain a guest JWT. Returns `{ token }`. No body required. Used as a fallback when no `TXLINE_DEV_JWT` env var is set. |
+| `POST /api/token/activate` | REST | Activate an API token after on-chain subscription. Returns `{ jwt, apiToken }`. Currently stubbed in development. |
+
+### Fixtures
+
+| Endpoint | Method | Params | Fields used |
+|---|---|---|---|
+| `GET /api/fixtures/snapshot` | REST | `startEpochDay`, optional `endEpochDay`, `statusId` | `FixtureId`, `Participant1`, `Participant2`, `Competition`, `StartTs`, `StatusId` |
+
+We default `startEpochDay` to 14 days before today when not supplied so the home page always shows recent results.
+
+### Scores
+
+| Endpoint | Method | Params | Fields used |
+|---|---|---|---|
+| `GET /api/scores/stream` | SSE | `fixtureId` | `Action`, `Ts`, `StatusId`, `Clock.Seconds`, `Score.Participant1/2.Total.Goals`, `PossessionType`, `PossibleEventSoccer`, `Data`, `Lineups`, `Participant1Id`, `Participant2Id` |
+| `GET /api/scores/snapshot/{fixtureId}` | REST | path: `fixtureId` | Same fields as stream; used for cold-start hydration on match page and full event reconstruction in the Replay Engine |
+| `GET /api/scores/history/{fixtureId}` | REST | `epochDay`, `hour`, `minute` | Full historical event array; reserved for time-travel queries |
+| `GET /api/scores/proof/{fixtureId}` | REST | `epochDay`, `ts` | Cryptographic proof object; embedded as `stat_a` in the on-chain Anchor transaction |
+
+**Key field notes from the scores stream:**
+
+- `Action` — string tag identifying the event type (`lineups`, `goal`, `substitution`, `var_start`, `var_end`, `yellow_card`, `red_card`, `shot`, `corner`, `foul`, `additional_time`, `safe_possession`, `attack_possession`, `danger_possession`, `high_danger_possession`, `hydration_break`, `kickoff`, `halftime`, `fulltime`)
+- `Score.Participant1/2.Total.Goals` — **this is the authoritative goal count.** `Stats` keys (numeric) are contextual and do NOT reliably map to goals — e.g. `Stats['2']` is corners, not goals.
+- `StatusId` — `1`=pre, `2`=1st half, `3`=HT, `4`=2nd half, `5`=FT, `6`=1st ET, `7`=2nd ET, `8`=ET HT, `9`=Pens
+- `Clock.Seconds` — match clock in seconds from kick-off; divide by 60 for display minute
+- `Participant1Id` / `Participant2Id` — numeric IDs identifying home/away teams; used for team attribution on all events
+- `Lineups` — only present on the `lineups` action; contains `preferredName`, `positionId`, `unitId`, `starter`, `rosterNumber` per player. **Only arrives during a live match — historical snapshots of completed matches do not include lineup data.**
+- `PossessionType` — drives the Danger Meter: `SafePossession`, `AttackPossession`, `DangerPossession`, `HighDangerPossession`
+- `Data.Outcome` — on shot events: `OnTarget` or `OffTarget`
+- `Data.PlayerId` / `Data.PlayerInId` / `Data.PlayerOutId` — player IDs on goals, subs, cards
+
+### Odds
+
+| Endpoint | Method | Params | Fields used |
+|---|---|---|---|
+| `GET /api/odds/stream` | SSE | `fixtureId` | Win probability percentage array `[Home%, Draw%, Away%]`; `InRunning` boolean |
+| `GET /api/odds/snapshot/{fixtureId}` | REST | path: `fixtureId` | Same probability array structure; used for the probability curve chart on the match page |
+| `GET /api/odds/history/{fixtureId}` | REST | `epochDay`, `hour`, `minute` | Time-series probability history; reserved for historical curve reconstruction |
+
+**Note:** On the devnet environment, odds data is sparse for many fixtures. The `match-highlights` route detects an empty odds response and synthesises a plausible probability curve from the score timeline (score differential + time elapsed). This fallback makes the chart functional during development.
+
+---
+
+## Developer Experience: Building on TxLINE
+
+### What we loved
+
+**The SSE feed design is genuinely excellent.** Piping a TCP SSE stream through a Next.js Edge route to the browser is five lines of code — `upstreamResponse.body` passes straight through as a `ReadableStream`. We were streaming live events to the UI within the first hour of touching the API. The `Last-Event-ID` reconnection header worked out of the box, so we got resilient reconnection for free.
+
+**The `Action` field makes event parsing trivial.** Every event in the scores stream carries a plain-English `Action` string. There is no magic numeric code to map — you read `"goal"` and you know it is a goal. This made building the event detection logic fast and readable. The possession actions (`safe_possession`, `danger_possession` etc.) are a particularly good design — they let us build the Danger Meter in minutes.
+
+**The cross-competition normalised schema is the real product.** The fixtures, scores, and odds endpoints all use the same field shapes regardless of competition. We could switch between World Cup group stages and knockout rounds without changing a line of parsing code. This is the core thing that makes the Longshot and Recap Engine roadmap items feasible — you genuinely can watch all fixtures simultaneously from one normalised feed.
+
+**The `Score` object is reliable.** `Score.Participant1.Total.Goals` is always the right number. It never lies. Once we understood to use this and never `Stats`, score handling became solid.
+
+**Free tier is generous.** Service level 12 (real-time World Cup data, no delay) costs zero TxL tokens. Getting real-time live match data for free during a hackathon is a huge advantage. It meant we could build something real instead of mocking data.
+
+**The proof endpoint is a great idea.** `GET /api/scores/proof/{fixtureId}?epochDay=X&ts=Y` returns a cryptographic proof tied to a specific event timestamp. The design intention — embed this in an on-chain transaction to create a permanently verifiable fan moment — is exactly right. The concept of the data feed being the source of truth for the proof is elegant.
+
+---
+
+### Where we hit friction
+
+**`Stats` numeric keys are a trap.** The scores stream emits a `Stats` object with numeric string keys (`"1"`, `"2"`, `"3"` etc.). There is no inline documentation on what each key means. Early in development we read `Stats['2']` and saw it increment — and assumed it was goals. It is corners. This caused a multi-session debugging spiral before we worked out that the correct path is always `Score.Participant1.Total.Goals`. **The fix: ignore `Stats` entirely for score tracking.** This needs to be front-and-centre in the documentation because the footgun is invisible — the value increments at plausible times.
+
+**Historical snapshots don't include lineup data.** `GET /api/scores/snapshot/{fixtureId}` for a completed match returns no `lineups` action item. The lineup data is only emitted live via SSE during the match itself. This means replay player names cannot be resolved from the snapshot — they appear as `#ID`. We accepted this as a known limitation, but it is a meaningful gap for any post-match feature. A `GET /api/lineups/{fixtureId}` REST endpoint returning the starting XI and subs for any completed match would unlock a lot.
+
+**Odds data is sparse on devnet.** Many fixtures return an empty array from `GET /api/odds/snapshot/{fixtureId}`. We wrote a score-based probability simulation as a fallback, but it is obviously synthetic. A richer devnet dataset — even just one or two complete fixtures with full odds history — would have made development smoother.
+
+**The two-token auth model requires careful reading.** Both `Authorization: Bearer <JWT>` and `X-Api-Token: <apiToken>` are required on every call — but the consequence of getting this wrong is a cryptic 401 with no body explaining which header is missing. It took a session to fully understand the relationship between the guest JWT, the API token, and the on-chain subscription. Better error messages (e.g. `"X-Api-Token missing or expired"` vs `"JWT expired"`) would halve the debug time.
+
+**JWT expiry handling requires proactive code.** The JWT expires in 30 days and the only signal is a 401 response. We added auto-refresh logic in the proof proxy (catch 401 → call `getGuestJWT()` → retry) but this pattern needs to be replicated in every proxy route. A token refresh endpoint or a short-lived token + refresh token pattern would be cleaner.
+
+**The `activate` flow is a Stage 6 stub.** The `POST /api/token/activate` endpoint (wallet signature → JWT + apiToken) is documented in the auth module but the on-chain verification is not yet implemented. For the hackathon we used a dev JWT directly, which works — but the intended end-to-end flow (fan subscribes on-chain → wallet-gated API access) couldn't be completed. This is the most exciting part of the TxLINE proposition and it would be worth a reference implementation.
+
+---
+
 ## Roadmap
 
 *Every item below passes the same research filter: does it solve a real fan problem that TxLINE's specific data shape makes uniquely possible?*
@@ -389,3 +475,4 @@ TxLINE's odds-swing data becomes a wordless crowd signal: a colour shift and sha
 
 ### Deep Solana Integration
 Upgrade on-chain event proofs from raw transactions to compressed NFTs (cNFTs), creating a persistent **Fan Passport**. Each minted moment becomes a collectible credential with the verified TxLINE timestamp as the source of truth.
+
