@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+// Safety gate: this page must never be accessible in production
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Debug page is not available in production.');
+}
+
 export default function DebugPage() {
   const [jwt, setJwt] = useState<string | null>(null);
   const [fixtures, setFixtures] = useState<any[]>([]);

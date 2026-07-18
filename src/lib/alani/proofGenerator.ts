@@ -100,9 +100,10 @@ export async function generateEventProof(
       event_type: eventType,
       event_ts: eventTs,
       event_minute: eventMinute,
-      proof_hash: txId, // Using txId as proof reference
+      proof_hash: txId,
       on_chain_tx: txId,
-      verified: true
+      // Demo bypass: not a real on-chain verification — mark accordingly
+      verified: !isDemoBypass,
     });
 
     // Update Form Score in profile

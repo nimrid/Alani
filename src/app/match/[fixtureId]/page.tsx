@@ -14,6 +14,8 @@ import { useTimelineStore } from '@/store/timelineStore';
 import { detectEvents } from '@/lib/alani/eventDetector';
 import { getFlag, getGroupName } from '@/lib/alani/utils';
 import { triggerNarration } from '@/lib/alani/narration';
+import { supabase } from '@/lib/alani/supabase';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 
 
@@ -26,6 +28,31 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
   const awayTeamName = fixtureData?.Participant2 || 'Away';
   useTxLineStream(fixtureId, 'scores', homeTeamName, awayTeamName);
   useTxLineStream(fixtureId, 'odds');
+  
+  const { publicKey } = useWallet();
+
+  // Fetch already verified moments for this user + fixture
+  useEffect(() => {
+    if (!publicKey) return;
+
+    const fetchVerified = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('fan_events')
+          .select('event_ts')
+          .eq('wallet_address', publicKey.toBase58())
+          .eq('fixture_id', fixtureId)
+          .eq('verified', true);
+
+        if (data && !error) {
+          useEventStore.getState().setVerifiedTimestamps(data.map(d => d.event_ts));
+        }
+      } catch (err) {
+        console.error("Failed to fetch verified moments", err);
+      }
+    };
+    fetchVerified();
+  }, [publicKey, fixtureId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,7 +320,7 @@ function MatchContent({ fixtureId }: { fixtureId: string }) {
 
       <TheAnalyst 
         eventQueue={events}
-        isReplayMode={true}
+        isReplayMode={isFinished}
         collapsed={analystCollapsed}
         onToggleCollapse={() => setAnalystCollapsed(!analystCollapsed)}
       />

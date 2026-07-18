@@ -5,7 +5,7 @@ import Map, { Marker, NavigationControl, GeolocateControl } from 'react-map-gl/m
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/lib/alani/supabase';
 import { WatchPartyForm } from '@/components/alani/WatchPartyForm';
-import { MapPin, Plus, Navigation } from 'lucide-react';
+import { MapPin, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -26,11 +26,12 @@ export default function WatchPartyPage() {
     zoom: 11
   });
   
-  const [parties, setParties] = useState<any[]>(MOCK_PARTIES);
+  const [parties, setParties] = useState<any[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(true);
 
   useEffect(() => {
     // 1. Fetch parties from Supabase
@@ -38,10 +39,8 @@ export default function WatchPartyPage() {
       try {
         const { data, error } = await supabase.from('watch_parties').select('*');
         if (error) throw error;
-        if (data && data.length > 0) {
-          // Merge mock data with real data for the demo
-          setParties([...MOCK_PARTIES, ...data]);
-        }
+        // Only show mocks if no real data exists
+        setParties(data && data.length > 0 ? data : MOCK_PARTIES);
       } catch (err) {
         console.warn('Could not fetch watch parties, falling back to mock data', err);
         // Supabase table might not exist yet, keeping MOCK_PARTIES
@@ -51,8 +50,11 @@ export default function WatchPartyPage() {
     };
 
     fetchParties();
+    // Geolocation is requested only when the user taps the prompt — see showLocationPrompt state
+  }, []);
 
-    // 2. Request Location Permission
+  const requestLocation = () => {
+    setShowLocationPrompt(false);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -67,14 +69,11 @@ export default function WatchPartyPage() {
         },
         (error) => {
           console.warn('Location permission denied or error:', error);
-          // Just stick to NY default
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
-    } else {
-      setLoading(false);
     }
-  }, []);
+  };
 
   const handleRegisterSuccess = (newParty: any) => {
     setParties(prev => [...prev, newParty]);
@@ -162,22 +161,32 @@ export default function WatchPartyPage() {
         )}
       </Map>
 
-      {/* Floating Action Button */}
-      <div className="absolute bottom-8 inset-x-0 flex flex-col justify-center items-center gap-3 z-10 pointer-events-none">
-        {!selectedLocation && (
-          <div className="bg-bg-elevated/90 backdrop-blur text-text-muted text-xs px-4 py-2 rounded-full border border-border-subtle shadow-sm pointer-events-auto">
-            Tap the map to choose a location
+      {/* Location permission prompt */}
+      {showLocationPrompt && !userLocation && (
+        <div className="absolute top-20 inset-x-0 flex justify-center z-20 px-4">
+          <div className="bg-bg-surface/95 backdrop-blur border border-border-subtle rounded-2xl p-4 shadow-xl flex items-start gap-3 max-w-sm w-full">
+            <span className="text-xl shrink-0">📍</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-text-primary mb-0.5">Find parties near you</p>
+              <p className="text-xs text-text-muted">Share your location to centre the map and discover watch parties in your area.</p>
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <button
+                onClick={requestLocation}
+                className="text-xs font-bold text-white bg-chain-purple px-3 py-1.5 rounded-lg hover:opacity-90 whitespace-nowrap"
+              >
+                Use my location
+              </button>
+              <button
+                onClick={() => setShowLocationPrompt(false)}
+                className="text-xs text-text-muted hover:text-text-primary text-center"
+              >
+                Skip
+              </button>
+            </div>
           </div>
-        )}
-        <button 
-          onClick={() => setShowForm(true)}
-          className="pointer-events-auto bg-chain-purple hover:bg-chain-purple/90 text-white font-bold py-3 px-6 rounded-full shadow-lg border border-white/10 flex items-center gap-2 transform transition-transform hover:scale-105"
-          style={{ boxShadow: '0 8px 32px rgba(111, 66, 193, 0.4)' }}
-        >
-          <Plus size={20} />
-          Register my watch party
-        </button>
-      </div>
+        </div>
+      )}
 
       {showForm && (
         <WatchPartyForm 

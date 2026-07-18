@@ -88,26 +88,33 @@ interface EventState {
   addEvent: (event: AlaniEvent) => void;
   updateEvent: (id: string, updates: Partial<AlaniEvent>) => void;
   setPendingProof: (event: AlaniEvent | null) => void;
+  verifiedTimestamps: number[];
+  setVerifiedTimestamps: (timestamps: number[]) => void;
+  addVerifiedTimestamp: (ts: number) => void;
   clear: () => void;
 }
 
 export const useEventStore = create<EventState>((set) => ({
   events: [],
   pendingProof: null,
+  verifiedTimestamps: [],
   addEvent: (event) => set((state) => {
     const isSignificant = ['GOAL', 'RED_CARD', 'VAR_DECISION', 'PENALTY_AWARDED'].includes(event.type);
+    const isAlreadyVerified = state.verifiedTimestamps.includes(event.ts);
     
     return {
       events: [event, ...state.events].slice(0, 50),
-      // Automatically prompt for proof on significant events
-      pendingProof: isSignificant ? event : state.pendingProof
+      // Automatically prompt for proof on significant events if not already verified
+      pendingProof: (isSignificant && !isAlreadyVerified) ? event : state.pendingProof
     };
   }),
   updateEvent: (id, updates) => set((state) => ({
     events: state.events.map(ev => ev.id === id ? { ...ev, ...updates } : ev)
   })),
   setPendingProof: (event) => set({ pendingProof: event }),
-  clear: () => set({ events: [], pendingProof: null }),
+  setVerifiedTimestamps: (timestamps) => set({ verifiedTimestamps: timestamps }),
+  addVerifiedTimestamp: (ts) => set((state) => ({ verifiedTimestamps: [...state.verifiedTimestamps, ts] })),
+  clear: () => set({ events: [], pendingProof: null, verifiedTimestamps: [] }),
 }));
 
 // 4. Lineup Store

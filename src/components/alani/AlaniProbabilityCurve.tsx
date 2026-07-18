@@ -3,6 +3,33 @@ import { useOddsStore } from '@/store/oddsStore';
 import { useTimelineStore } from '@/store/timelineStore';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceDot } from 'recharts';
 
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-bg-elevated border border-border-subtle p-3 rounded shadow-lg text-sm font-sans z-50 pointer-events-none">
+        <div className="text-text-muted mb-2 font-display uppercase tracking-widest text-xs border-b border-border-subtle pb-1">
+          Minute {data.minute}
+        </div>
+        <div style={{ color: 'var(--color-odds-up)' }} className="font-bold">Home: {payload[0].value?.toFixed(1)}%</div>
+        <div style={{ color: 'var(--color-text-muted)' }} className="font-bold">Draw: {payload[1].value?.toFixed(1)}%</div>
+        <div style={{ color: 'var(--color-odds-down)' }} className="font-bold">Away: {payload[2].value?.toFixed(1)}%</div>
+        {data.events && data.events.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-border-subtle">
+            {data.events.map((ev: any, i: number) => (
+              <div key={i} className="text-xs font-bold text-white flex items-center gap-1">
+                <span>{ev.type === 'GOAL' ? '⚽' : '🔥'}</span>
+                <span>{ev.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 export function AlaniProbabilityCurve({ fixtureId, isFinished }: { fixtureId?: string, isFinished?: boolean }) {
   const liveHistory = useOddsStore((state) => state.history);
   const setScrubMinute = useTimelineStore(state => state.setScrubMinute);
@@ -75,33 +102,6 @@ export function AlaniProbabilityCurve({ fixtureId, isFinished }: { fixtureId?: s
     setScrubMinute(null);
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-bg-elevated border border-border-subtle p-3 rounded shadow-lg text-sm font-sans z-50">
-          <div className="text-text-muted mb-2 font-display uppercase tracking-widest text-xs border-b border-border-subtle pb-1">
-            Minute {data.minute}
-          </div>
-          <div style={{ color: 'var(--color-odds-up)' }} className="font-bold">Home: {payload[0].value?.toFixed(1)}%</div>
-          <div style={{ color: 'var(--color-text-muted)' }} className="font-bold">Draw: {payload[1].value?.toFixed(1)}%</div>
-          <div style={{ color: 'var(--color-odds-down)' }} className="font-bold">Away: {payload[2].value?.toFixed(1)}%</div>
-          {data.events && data.events.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-border-subtle">
-              {data.events.map((ev: any, i: number) => (
-                <div key={i} className="text-xs font-bold text-white flex items-center gap-1">
-                  <span>{ev.type === 'GOAL' ? '⚽' : '🔥'}</span>
-                  <span>{ev.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="w-full h-full p-4 bg-bg-surface">
       <div className="flex items-center justify-between mb-4 px-2">
@@ -154,7 +154,7 @@ export function AlaniProbabilityCurve({ fixtureId, isFinished }: { fixtureId?: s
                 r={10} 
                 fill="var(--color-bg-elevated)" 
                 stroke="var(--color-border-subtle)"
-                label={{ position: 'top', value: '⚽', fill: 'white' }}
+                label="⚽"
               />
             ))}
           </LineChart>

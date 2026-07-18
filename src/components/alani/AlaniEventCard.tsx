@@ -51,6 +51,8 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
   const { connected } = useWallet();
   const anchorWallet = useAnchorWallet();
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
+  const isAlreadyVerified = useEventStore(state => state.verifiedTimestamps.includes(event.ts));
+  const pendingProofId = useEventStore(state => state.pendingProof?.id);
 
   // ── Phase markers (Kickoff / HT / FT) ────────────────────────────────────
   if (['KICKOFF', 'HALFTIME', 'FULLTIME'].includes(type)) {
@@ -214,7 +216,7 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
               </div>
             )}
 
-            {narrateStatus === 'complete' && (
+            {isAlreadyVerified && (
               <div className="flex items-center space-x-1 text-xs" style={{ color: 'var(--color-chain)' }}>
                 <span>[ verified ✓ ]</span>
               </div>
@@ -222,7 +224,7 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
           </div>
 
           {/* On-chain verification prompt */}
-          {useEventStore(state => state.pendingProof?.id) === event.id && (
+          {!isAlreadyVerified && pendingProofId === event.id && (
             <div className="w-full mt-2 bg-chain-purple/10 border border-chain-purple/30 rounded-xl p-4 animate-in slide-in-from-bottom-2 duration-300 relative overflow-hidden">
               <div
                 className="absolute top-0 right-0 p-2 text-chain-purple/50 hover:text-chain-purple cursor-pointer"
@@ -250,6 +252,7 @@ export function AlaniEventCard({ event }: AlaniEventCardProps) {
                     const fixtureId = Number(window.location.pathname.split('/').pop());
                     const txId = await generateEventProof(anchorWallet, fixtureId, event.type, event.ts, event.minute);
                     useEventStore.getState().setPendingProof(null);
+                    useEventStore.getState().addVerifiedTimestamp(event.ts);
                     alert(`Verified successfully! TX: ${txId}`);
                   } catch (err: any) {
                     alert('Verification failed: ' + err.message);

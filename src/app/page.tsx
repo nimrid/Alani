@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Settings, Map as MapIcon } from 'lucide-react';
+import { Map as MapIcon, User } from 'lucide-react';
 import { computeDramaIndex, MatchDramaState } from '@/lib/alani/dramaIndex';
 import { AlaniWalletConnect } from '@/components/alani/AlaniWalletConnect';
 import { SkeletonMatchCard } from '@/components/alani/AlaniSkeleton';
 import { getFlag, getGroupName } from '@/lib/alani/utils';
 import { KickoffReminder } from '@/components/alani/KickoffReminder';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 interface Fixture {
   Ts: number;
@@ -97,12 +98,14 @@ function extractOdds(oddsData: any[]): { homeWinPct: number; awayWinPct: number 
   };
 }
 
-export default function Home() {
+const Home = () => {
   const router = useRouter();
+  const { connected } = useWallet();
   const [liveMatches, setLiveMatches] = useState<LiveMatchData[]>([]);
   const [upcomingMatches, setUpcomingMatches] = useState<Fixture[]>([]);
   const [completedMatches, setCompletedMatches] = useState<{ fixture: Fixture; homeGoals: number; awayGoals: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   const loadData = () => {
     fetch('/api/txline/fixtures')
@@ -194,6 +197,7 @@ export default function Home() {
       .catch(err => {
         console.error(err);
         setLoading(false);
+        setFetchError(true);
       });
   };
 
@@ -267,8 +271,8 @@ export default function Home() {
         </div>
         <div className="w-full h-1.5 rounded-full bg-bg-elevated overflow-hidden flex">
           <div className="h-full bg-odds-up transition-all duration-500" style={{ width: `${homeWinPct}%` }} />
-          <div className="w-px h-full bg-bg-base" />
-          <div className="h-full bg-odds-down flex-1" />
+          <div className="w-px h-full bg-bg-base shrink-0" />
+          <div className="h-full bg-odds-down transition-all duration-500" style={{ width: `${awayWinPct}%` }} />
         </div>
 
         <div className="mt-3 flex justify-end">
@@ -342,20 +346,35 @@ export default function Home() {
     <div className="w-full min-h-screen bg-bg-base flex flex-col items-center">
       {/* Header */}
       <header className="w-full max-w-lg h-16 flex items-center justify-between px-4 border-b border-border-subtle bg-bg-surface/80 backdrop-blur sticky top-0 z-30">
-        <div className="font-display font-black text-xl tracking-tight text-text-primary">
-          Alani
-        </div>
+        <Link href="/" className="group flex items-baseline gap-[2px] cursor-pointer select-none">
+          <div className="font-display font-black text-2xl tracking-tighter bg-gradient-to-br from-chain-purple via-[#818CF8] to-[#4F46E5] text-transparent bg-clip-text">
+            Alani
+          </div>
+          <div className="w-1.5 h-1.5 rounded-full bg-chain-purple animate-pulse group-hover:scale-150 transition-transform" />
+        </Link>
         <div className="flex gap-4 items-center">
           <Link href="/watch-party" className="text-text-secondary hover:text-chain-purple flex items-center gap-1 transition-colors">
             <MapIcon size={20} />
             <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Watch Parties</span>
           </Link>
-          <button className="text-text-secondary hover:text-text-primary active:scale-90 transition-all"><Settings size={20} /></button>
+          {connected && (
+            <Link href="/profile" className="text-text-secondary hover:text-chain-purple flex items-center gap-1 transition-colors">
+              <User size={20} />
+              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Profile</span>
+            </Link>
+          )}
           <AlaniWalletConnect />
         </div>
       </header>
 
       <main className="w-full max-w-lg flex-1 p-4 pb-24">
+        {/* Error state */}
+        {fetchError && (
+          <div className="mb-6 px-4 py-3 rounded-xl bg-high-danger/10 border border-high-danger/30 text-sm text-high-danger font-medium flex items-center gap-2">
+            <span>⚠️</span>
+            <span>Could not reach the TxLINE data feed. Check your connection or try refreshing.</span>
+          </div>
+        )}
         {/* Live Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -411,8 +430,10 @@ export default function Home() {
       </main>
 
       <footer className="w-full max-w-lg py-6 flex justify-center border-t border-border-subtle bg-bg-base">
-        <div className="text-xs text-text-muted">powered by txline</div>
+        <div className="text-xs text-text-muted">powered by TxLINE</div>
       </footer>
     </div>
   );
 }
+
+export default Home;
