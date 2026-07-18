@@ -64,7 +64,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-bg-base flex flex-col text-text-primary">
       {/* Header */}
       <header className="h-[72px] flex items-center px-4 border-b border-border-subtle bg-bg-surface sticky top-0 z-10">
-        <button onClick={() => router.push('/')} className="p-2 hover:bg-bg-elevated rounded-full transition-colors mr-2">
+        <button onClick={() => router.push('/home')} className="p-2 hover:bg-bg-elevated rounded-full transition-colors mr-2">
           <ArrowLeft size={20} className="text-text-secondary" />
         </button>
         <h1 className="font-display font-bold text-xl flex-1">Fan Profile</h1>

@@ -217,7 +217,7 @@ export function TheAnalyst({ eventQueue, isReplayMode, collapsed, onToggleCollap
 
   return (
     <div 
-      className={`fixed z-50 transition-transform duration-300 ease-out ${isReplayMode ? 'translate-x-0' : 'translate-x-[200%]'}`}
+      className={`fixed z-50 transition-transform duration-300 ease-out ${!isReplayMode ? 'translate-x-0' : 'translate-x-[200%]'}`}
       style={{ bottom: collapsed ? '16px' : '80px', right: '16px' }}
     >
       {collapsed ? (

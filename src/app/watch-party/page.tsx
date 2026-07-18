@@ -104,7 +104,7 @@ export default function WatchPartyPage() {
         <p className="text-text-muted max-w-md">
           Please add your NEXT_PUBLIC_MAPBOX_TOKEN to the .env.local file to view the watch party map.
         </p>
-        <Link href="/" className="mt-6 text-chain-purple hover:underline">
+        <Link href="/home" className="mt-6 text-chain-purple hover:underline">
           Return to Home
         </Link>
       </div>
@@ -116,7 +116,7 @@ export default function WatchPartyPage() {
       {/* Header overlay */}
       <div className="absolute top-0 inset-x-0 z-10 p-4 bg-gradient-to-b from-bg-base/80 to-transparent pointer-events-none">
         <div className="flex items-center gap-4 pointer-events-auto">
-          <Link href="/" className="p-2 bg-bg-surface/80 backdrop-blur rounded-full hover:bg-bg-elevated transition-colors border border-border-subtle shadow-sm">
+          <Link href="/home" className="p-2 bg-bg-surface/80 backdrop-blur rounded-full hover:bg-bg-elevated transition-colors border border-border-subtle shadow-sm">
             <ArrowLeft size={20} />
           </Link>
           <div>
@@ -160,6 +160,19 @@ export default function WatchPartyPage() {
           </Marker>
         )}
       </Map>
+
+      {/* Add Watch Party Button */}
+      {selectedLocation && !showForm && (
+        <div className="absolute bottom-8 inset-x-0 flex justify-center z-20 pointer-events-none">
+          <button 
+            onClick={() => setShowForm(true)}
+            className="pointer-events-auto bg-chain-purple hover:bg-chain-purple/90 text-white font-bold py-3 px-6 rounded-full shadow-2xl flex items-center gap-2 transition-transform hover:scale-105"
+          >
+            <Plus size={20} />
+            Add Watch Party Here
+          </button>
+        </div>
+      )}
 
       {/* Location permission prompt */}
       {showLocationPrompt && !userLocation && (

@@ -172,7 +172,7 @@ export function AlaniMatchHeader({
       <div className="w-full pt-12 pb-4 flex flex-col items-center justify-center bg-bg-base border-b border-border-subtle shrink-0 relative min-h-[140px]">
         <div
           className="absolute top-4 left-4 z-10 cursor-pointer text-text-muted hover:text-text-primary active:scale-90 transition-all text-sm font-bold tracking-wider uppercase select-none"
-          onClick={() => router.push('/')}
+          onClick={() => router.push('/home')}
         >
           ← Back
         </div>
