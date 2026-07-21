@@ -1,5 +1,5 @@
 import { loadEnvConfig } from '@next/env';
-import { getGuestJWT, buildTxLineHeaders, TXLINE_CONFIG } from './src/lib/txline/auth.ts';
+import { getGuestJWT, buildTxLineHeaders, TXLINE_CONFIG } from './src/lib/txline/auth';
 
 loadEnvConfig(process.cwd());
 
@@ -15,15 +15,15 @@ async function run() {
     const data = await res.json();
     
     const ROUND_IDS = [10115574, 10115675, 10115573, 10115572];
-    const knockoutFixtures = data.filter(f => ROUND_IDS.includes(f.FixtureGroupId));
+    const knockoutFixtures = data.filter((f: any) => ROUND_IDS.includes(f.FixtureGroupId));
     
     console.log("Found knockout fixtures:", knockoutFixtures.length);
     
-    knockoutFixtures.forEach(f => {
+    knockoutFixtures.forEach((f: any) => {
        console.log(`[Grp: ${f.FixtureGroupId}] ${f.Participant1} vs ${f.Participant2} | Start: ${new Date(f.StartTime).toISOString()}`);
     });
 
-  } catch(e) {
+  } catch(e: any) {
     console.log("Error:", e);
   }
 }
