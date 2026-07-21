@@ -1,8 +1,20 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { AnchorProvider, BN } from "@coral-xyz/anchor";
-import { Transaction, SystemProgram } from "@solana/web3.js";
+import { Transaction } from "@solana/web3.js";
 import { getTxLineProgram, getDailyScoresPda } from "./solana";
 import { supabase } from "./supabase";
+
+// Solana Memo program — a built-in program, no install required.
+// Writes arbitrary UTF-8 data into a transaction permanently on-chain.
+const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+
+function buildMemoInstruction(memoText: string, signerPubkey: PublicKey): TransactionInstruction {
+  return new TransactionInstruction({
+    keys: [{ pubkey: signerPubkey, isSigner: true, isWritable: false }],
+    programId: MEMO_PROGRAM_ID,
+    data: Buffer.from(memoText, 'utf8'),
+  });
+}
 
 export async function generateEventProof(
   wallet: any,
@@ -16,8 +28,8 @@ export async function generateEventProof(
   }
 
   const epochDay = Math.floor(eventTs / (24 * 60 * 60 * 1000));
-  
-  // 1. Fetch proof from proxy
+
+  // 1. Try to fetch TxLINE Merkle proof
   let isDemoBypass = false;
   let proofData = null;
   try {
@@ -36,42 +48,54 @@ export async function generateEventProof(
   let txId = "";
 
   if (isDemoBypass) {
-    console.warn("Demo mode: Proof not found on TxLINE network. Bypassing Anchor validation for UI demo.");
-    const tx = new Transaction().add(SystemProgram.transfer({
-      fromPubkey: wallet.publicKey,
-      toPubkey: wallet.publicKey,
-      lamports: 100 // dummy
-    }));
+    // TxLINE Merkle proof unavailable (common on devnet — proof data is sparse).
+    // Record a real Memo transaction instead of a fake self-transfer so the fan
+    // moment is genuinely on-chain and viewable in the devnet Explorer.
+    console.info("TxLINE Merkle proof unavailable — recording fan moment via Solana Memo program.");
+
+    const memoPayload = JSON.stringify({
+      app: 'Alani',
+      fixture: fixtureId,
+      event: eventType,
+      ts: eventTs,
+      minute: eventMinute,
+      epoch_day: epochDay,
+    });
+
+    const tx = new Transaction().add(
+      buildMemoInstruction(memoPayload, wallet.publicKey)
+    );
     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
     tx.feePayer = wallet.publicKey;
-    
-    // Request Signature for UX demo
-    await wallet.signTransaction(tx);
-    txId = "demo_tx_" + Math.random().toString(36).slice(2);
+
+    const signedTx = await wallet.signTransaction(tx);
+    txId = await connection.sendRawTransaction(signedTx.serialize());
+
   } else {
+    // Full TxLINE Merkle proof path — verifies the event against the on-chain
+    // daily_scores_roots PDA via TxLINE's own Solana program.
     const { fixtureProof, mainTreeProof, fixtureSummary } = proofData;
 
     // 2. Setup Anchor
     const provider = new AnchorProvider(connection, wallet, {});
     const program = getTxLineProgram(provider);
-
     const dailyScoresPda = getDailyScoresPda(epochDay);
 
-    // Determine StatTerm based on event_type.
+    // 3. Map event type to TxLINE StatTerm variant
     let statTermVariant = '';
     switch (eventType.toUpperCase()) {
-      case 'GOAL': statTermVariant = 'goalsSoccer'; break;
-      case 'OWN_GOAL': statTermVariant = 'goalsSoccer'; break;
-      case 'RED_CARD': statTermVariant = 'redCardsSoccer'; break;
-      case 'YELLOW_CARD': statTermVariant = 'yellowCardsSoccer'; break;
-      case 'FOUL': statTermVariant = 'foulsSoccer'; break;
-      case 'OFFSIDE': statTermVariant = 'offsidesSoccer'; break;
-      case 'SHOT': statTermVariant = 'shotsOnTargetSoccer'; break;
-      default: statTermVariant = 'goalsSoccer'; // fallback
+      case 'GOAL':        statTermVariant = 'goalsSoccer'; break;
+      case 'OWN_GOAL':   statTermVariant = 'goalsSoccer'; break;
+      case 'RED_CARD':   statTermVariant = 'redCardsSoccer'; break;
+      case 'YELLOW_CARD':statTermVariant = 'yellowCardsSoccer'; break;
+      case 'FOUL':       statTermVariant = 'foulsSoccer'; break;
+      case 'OFFSIDE':    statTermVariant = 'offsidesSoccer'; break;
+      case 'SHOT':       statTermVariant = 'shotsOnTargetSoccer'; break;
+      default:           statTermVariant = 'goalsSoccer';
     }
     const statTerm = { [statTermVariant]: {} };
 
-    // 3. Create Transaction
+    // 4. Build and send validateStat transaction
     const tx = await program.methods.validateStat(
       new BN(eventTs),
       fixtureSummary,
@@ -87,7 +111,6 @@ export async function generateEventProof(
     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
     tx.feePayer = wallet.publicKey;
 
-    // 4. Request Signature
     const signedTx = await wallet.signTransaction(tx);
     txId = await connection.sendRawTransaction(signedTx.serialize());
   }
@@ -102,11 +125,11 @@ export async function generateEventProof(
       event_minute: eventMinute,
       proof_hash: txId,
       on_chain_tx: txId,
-      // Demo bypass: not a real on-chain verification — mark accordingly
+      // Memo-path moments are real on-chain txs but not Merkle-verified by TxLINE's program
       verified: !isDemoBypass,
     });
 
-    // Update Form Score in profile
+    // 6. Update Form Score
     const { data: profile } = await supabase
       .from('fan_profiles')
       .select('form_score')
@@ -120,7 +143,7 @@ export async function generateEventProof(
         .eq('wallet_address', wallet.publicKey.toBase58());
     }
 
-    // Notify UI to update
+    // 7. Notify UI
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('alani_form_score_updated'));
     }

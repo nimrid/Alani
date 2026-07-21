@@ -368,6 +368,31 @@ const Home = () => {
       </header>
 
       <main className="w-full max-w-lg flex-1 p-4 pb-24">
+        {/* Tournament Bracket Banner */}
+        <Link 
+          href="/bracket" 
+          className="group block mb-8 w-full bg-gradient-to-r from-chain-purple/20 to-bg-surface border border-chain-purple/30 rounded-xl p-4 hover:border-chain-purple hover:bg-chain-purple/10 transition-all cursor-pointer relative overflow-hidden"
+        >
+          <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-bg-surface to-transparent z-10" />
+          <div className="absolute -right-4 -top-8 text-8xl opacity-10 rotate-12 z-0">🏆</div>
+          <div className="relative z-20 flex items-center justify-between">
+             <div>
+               <div className="flex items-center gap-2 mb-1">
+                 <div className="w-2 h-2 rounded-full bg-chain-purple animate-pulse" />
+                 <h2 className="font-display font-black text-lg tracking-tight text-text-primary group-hover:text-white transition-colors">
+                   Knockout Bracket
+                 </h2>
+               </div>
+               <p className="text-xs text-text-secondary font-medium tracking-wide">
+                 Follow the World Cup finals →
+               </p>
+             </div>
+             <div className="w-8 h-8 rounded-full bg-bg-base/50 flex items-center justify-center text-chain-purple group-hover:scale-110 group-hover:bg-chain-purple group-hover:text-white transition-all">
+               →
+             </div>
+          </div>
+        </Link>
+
         {/* Error state */}
         {fetchError && (
           <div className="mb-6 px-4 py-3 rounded-xl bg-high-danger/10 border border-high-danger/30 text-sm text-high-danger font-medium flex items-center gap-2">
